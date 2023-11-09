@@ -1,0 +1,197 @@
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>WebSocket Enquete</title>
+    <style>
+            body {
+        margin: 0;
+        padding-bottom: 3rem;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      }
+
+      #form {
+        background: rgba(0, 0, 0, 0.15);
+        padding: 0.25rem;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        display: flex;
+        height: 3rem;
+        box-sizing: border-box;
+        backdrop-filter: blur(10px);
+      }
+      #input {
+        border: none;
+        padding: 0 1rem;
+        flex-grow: 1;
+        border-radius: 2rem;
+        margin: 0.25rem;
+      }
+      #input:focus {
+        outline: none;
+      }
+      #form > button {
+        background: #333;
+        border: none;
+        padding: 0 1rem;
+        margin: 0.25rem;
+        border-radius: 3px;
+        outline: none;
+        color: #fff;
+      }
+
+      #messages {
+        list-style-type: none;
+        margin: 0;
+        padding: 0;
+      }
+      #messages > li {
+        padding: 0.5rem 1rem;
+      }
+      #messages > li:nth-child(odd) {
+        background: #efefef;
+      }
+    </style>
+  </head>
+   <body>
+    <div id="registration">
+      <input id="username" autocomplete="off" placeholder="Your Name" />
+      <button id="registerButton">Register</button>
+    </div>
+    <div id="enqueteList" style="display:none;">
+      <h3>Enquetes Abertas:</h3>
+      <ul id="enquetesUl"></ul>
+    </div>
+    <div id="enqueteCreation" style="display:none;">
+      <input id="enqueteInput" autocomplete="off" placeholder="Enquete Question" />
+      <input id="opcoesInput" autocomplete="off" placeholder="Opcoes (separadas por vírgula)" />
+      <button id="createEnqueteButton">Create Enquete</button>
+    </div>
+    <div id="enquete" style="display:none;">
+      <h3 id="enqueteQuestion"></h3>
+      <div id="opcoesDiv">
+        <ul id="opcoesList"></ul>
+      </div>
+      <div id="resultado">
+      </div>
+      <button id="voteButton" disabled>Vote</button>
+    </div>
+    <ul id="messages" style="display:none;"></ul>
+    <form id="form" action="" style="display:none;">
+      <input id="input" autocomplete="off" placeholder="Message" />
+      <button>Send</button>
+    </form>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+      var socket = io();
+
+      var messages = document.getElementById('messages');
+      var registrationDiv = document.getElementById('registration');
+      var enqueteCreationDiv = document.getElementById('enqueteCreation');
+      var enqueteListDiv = document.getElementById('enqueteList');
+      var enqueteDiv = document.getElementById('enquete');
+      var enqueteQuestion = document.getElementById('enqueteQuestion');
+      var opcoesDiv = document.getElementById('opcoesDiv');
+      var opcoesList = document.getElementById('opcoesList');
+      var voteButton = document.getElementById('voteButton');
+      var enqueteUl = document.getElementById('enquetesUl');
+      var form = document.getElementById('form');
+      var input = document.getElementById('input');
+      var usernameInput = document.getElementById('username');
+      var registerButton = document.getElementById('registerButton');
+      var enqueteInput = document.getElementById('enqueteInput');
+      var opcoesInput = document.getElementById('opcoesInput');
+      var createEnqueteButton = document.getElementById('createEnqueteButton');
+
+      registerButton.addEventListener('click', function() {
+        var username = usernameInput.value;
+        if (username) {
+          registrationDiv.style.display = 'none';
+          enqueteListDiv.style.display = 'block';
+          enqueteCreationDiv.style.display = 'block';
+          messages.style.display = 'block';
+          socket.emit('user registered', username);
+        }
+      });
+
+      createEnqueteButton.addEventListener('click', function() {
+        var pergunta = enqueteInput.value;
+        var opcoes = opcoesInput.value.split(',').map(option => option.trim());
+        if (pergunta && opcoes.length > 1) {
+          enqueteInput.value = '';
+          opcoesInput.value = '';
+          socket.emit('criar enquete', pergunta, opcoes);
+        }
+      });
+
+      voteButton.addEventListener('click', function() {
+        var selectedOption = opcoesList.querySelector('input:checked');
+        if (selectedOption) {
+          const enqueteIndex = document.getElementsByClassName('enqueteLi')[0]
+          console.log(selectedOption.value);
+          console.log(enqueteUl);
+          socket.emit('votar',0,selectedOption.value);
+        }
+      });
+
+      form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        var message = input.value;
+        if (message) {
+          socket.emit('chat message', message);
+          input.value = '';
+        }
+      });
+
+      socket.on('chat message', function(data) {
+        var item = document.createElement('li');
+        item.textContent = data.username + ": " + data.message;
+        messages.appendChild(item);
+        window.scrollTo(0, document.body.scrollHeight);
+      });
+
+      socket.on('enquetes atualizadas', function(enquetes) {
+        enqueteUl.innerHTML = '';
+        enquetes.forEach(function(enquete, index) {
+          var enqueteItem = document.createElement('li');
+          enqueteItem.classList.add('enqueteLi');
+          enqueteItem.textContent = enquete.pergunta + ' (Criada por ' + enquete.criador + ')';
+          enqueteUl.appendChild(enqueteItem);
+          //enqueteItem.addEventListener('click', function() {
+            enqueteIndex = index;
+            showEnquete(index, enquete);
+         // });
+        });
+      });
+
+      function showEnquete(index, enquete) {
+        divResultado = document.getElementById('resultado')
+        enqueteListDiv.style.display = 'none';
+        enqueteQuestion.textContent = enquete.pergunta;
+        opcoesList.innerHTML = '';
+        enquete.opcoes.forEach(function(opcao) {
+          var optionItem = document.createElement('li');
+          var optionInput = document.createElement('input');
+          optionInput.type = 'radio';
+          optionInput.name = 'opcao';
+          optionInput.value = opcao;
+          optionItem.appendChild(optionInput);
+          optionItem.appendChild(document.createTextNode(opcao));
+          opcoesList.appendChild(optionItem);
+          divResultado.append(opcao + ': ' + enquete.resultados[opcao]);       
+        });
+        voteButton.disabled = false;
+
+        voteButton.onclick = function() {
+          var selectedOption = opcoesList.querySelector('input:checked');
+          if (selectedOption) {
+            socket.emit('votar', index, selectedOption.value);
+          }
+        };
+        enqueteDiv.style.display = 'block';
+      }
+    </script>
+  </body>
+</html>
